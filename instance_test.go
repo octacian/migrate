@@ -87,7 +87,7 @@ func TestWorkingInstance(t *testing.T) {
 
 			if err := instance.Latest(); err == nil {
 				t.Error("Instance.Latest: expected error with database already on latest migration")
-			} else if !strings.Contains(err.Error(), "is the latest") {
+			} else if !strings.Contains(err.Error(), "no migrations to apply") {
 				t.Error("Instance.Latest: got unexpected error message with database already on latest migration:\n", err)
 			}
 
@@ -105,7 +105,7 @@ func TestWorkingInstance(t *testing.T) {
 
 			if err := instance.Goto(3); err == nil {
 				t.Error("Instance.Goto: expected error with current database version")
-			} else if !strings.Contains(err.Error(), "is already on version") {
+			} else if !strings.Contains(err.Error(), "no migrations to apply") {
 				t.Error("Instance.Goto: got unexpected error message with current database version:\n", err)
 			}
 

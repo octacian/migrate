@@ -15,23 +15,26 @@ import (
 
 // ErrNoVersion is returned by Goto when the requested version does not exist.
 type ErrNoVersion struct {
-	Message string
+	Version int
+	Target  int
 }
 
 // Error implements the error interface for ErrNoVersion.
 func (err *ErrNoVersion) Error() string {
-	return err.Message
+	return fmt.Sprintf("Instance.Goto: migration for version '%d', on the way to version "+
+		"'%d', does not exist", err.Version, err.Target)
 }
 
 // ErrNoMigrations is returned by Goto and Latest when there are no more
 // migrations to apply.
 type ErrNoMigrations struct {
-	Message string
+	Version int
 }
 
 // Error implements the error interface for ErrNoMigrations.
 func (err *ErrNoMigrations) Error() string {
-	return err.Message
+	return fmt.Sprintf("Instance.Goto: no migrations to apply, current version %d == latest version %d",
+		err.Version, err.Version)
 }
 
 // Instance represents a single collective set of migrations. With the
@@ -55,12 +58,12 @@ type Instance struct {
 // between two migration versions or if any other error occurs.
 func NewInstance(db *sql.DB, root string) (*Instance, error) {
 	if db == nil {
-		return nil, fmt.Errorf("NewInstance: got nil database handle")
+		return nil, NewFatalf("NewInstance: got nil database handle")
 	}
 
 	meta, err := metadb.NewInstance(db)
 	if err != nil {
-		return nil, fmt.Errorf("NewInstance: got error while creating metadb instance:\n%s", err)
+		return nil, NewFatalf("NewInstance: got error while creating metadb instance:\n%s", err)
 	}
 
 	instance := &Instance{db: db, meta: meta, migrations: make(map[int]*Migration, 0), Output: os.Stdout}
@@ -85,7 +88,7 @@ func NewInstance(db *sql.DB, root string) (*Instance, error) {
 
 	// if no migrations were added, return an error
 	if len(instance.migrations) == 0 {
-		return nil, fmt.Errorf("NewInstance: no migrations found in '%s'", root)
+		return nil, NewFatalf("NewInstance: no migrations found in '%s'", root)
 	}
 
 	keys := make([]int, 0)
@@ -98,7 +101,7 @@ func NewInstance(db *sql.DB, root string) (*Instance, error) {
 	// Check for gaps in migration version
 	for _, key := range keys {
 		if key != lastVersion+1 {
-			return nil, fmt.Errorf("NewInstance: found gap between migration version %d and %d", lastVersion, key)
+			return nil, NewFatalf("NewInstance: found gap between migration version %d and %d", lastVersion, key)
 		}
 		lastVersion++
 	}
@@ -126,7 +129,7 @@ func (instance *Instance) Version() int {
 // state defined by the migration version specified. Goto employs transactions,
 // ensuring that if anything fails, the database is automatically reverted to
 // how it was before Goto was called.
-func (instance *Instance) Goto(version int) error {
+func (instance *Instance) Goto(target int) error {
 	currentVersion := instance.Version()
 	todo := make([]*Migration, 0)
 	direction := "up"
@@ -136,34 +139,32 @@ func (instance *Instance) Goto(version int) error {
 	addToTodo := func(i int) error {
 		midway, ok := instance.migrations[i]
 		if !ok {
-			return &ErrNoVersion{fmt.Sprintf("Instance.Goto: migration for version '%d', on the way to version "+
-				"'%d', does not exist", i, version)}
+			return &ErrNoVersion{Version: i, Target: target}
 		}
 		todo = append(todo, midway)
 		return nil
 	}
 
 	// if requested version is greater than the current version, migrate up
-	if version > currentVersion {
-		for i := currentVersion + 1; i <= version; i++ {
+	if target > currentVersion {
+		for i := currentVersion + 1; i <= target; i++ {
 			if err := addToTodo(i); err != nil {
 				return err
 			}
 		}
 
-		jump = version - currentVersion
-	} else if version < currentVersion { // else if requested version is less than the current version, migrate down
-		for i := currentVersion - 1; i > version; i-- {
+		jump = target - currentVersion
+	} else if target < currentVersion { // else if requested version is less than the current version, migrate down
+		for i := currentVersion - 1; i > target; i-- {
 			if err := addToTodo(i); err != nil {
 				return err
 			}
 		}
 
 		direction = "down"
-		jump = currentVersion - version
+		jump = currentVersion - target
 	} else { // else, specified version is the same as the current version, return an error
-		return &ErrNoMigrations{fmt.Sprintf("Instance.Goto: no migrations to apply, database is already on version '%d'",
-			version)}
+		return &ErrNoMigrations{target}
 	}
 
 	if jump > 1 {
@@ -172,7 +173,7 @@ func (instance *Instance) Goto(version int) error {
 
 	transaction, err := instance.db.Begin()
 	if err != nil {
-		return fmt.Errorf("Instance.Goto: got error while starting a transaction:\n%s", err)
+		return NewFatalf("Instance.Goto: got error while starting a transaction:\n%s", err)
 	}
 
 	// Loop through and apply migrations
@@ -208,18 +209,18 @@ func (instance *Instance) Goto(version int) error {
 				"applied parts...\033[0m\n", len(failed), len(applied))
 
 			transaction.Rollback()
-			return fmt.Errorf("Instance.Goto: got error while applying migrations")
+			return NewFatalf("Instance.Goto: got error while applying migrations")
 		}
 
 		fmt.Fprintf(instance.Output, "\033[1mmigrate: Successfully applied %d migration part(s)\n", len(applied))
 	}
 
 	if err := transaction.Commit(); err != nil {
-		return fmt.Errorf("Instance.Goto: got error while committing transaction:\n%s", err)
+		return NewFatalf("Instance.Goto: got error while committing transaction:\n%s", err)
 	}
 
-	if err := instance.meta.Set("migrateVersion", version); err != nil {
-		return fmt.Errorf("Instance.Goto: got error while updating migrate version:\n%s", err)
+	if err := instance.meta.Set("migrateVersion", target); err != nil {
+		return NewFatalf("Instance.Goto: got error while updating migrate version:\n%s", err)
 	}
 
 	fmt.Fprintf(instance.Output, "\n\033[1mmigrate: Successfully applied migrations in %s\033[0m\n", time.Since(start))
@@ -231,7 +232,6 @@ func (instance *Instance) Goto(version int) error {
 // ensuring that if anything fails, the database is automatically reverted to
 // how it was before Latest was called.
 func (instance *Instance) Latest() error {
-	currentVersion := instance.Version()
 	latestVersion := 0
 
 	// Find highest available version
@@ -239,11 +239,6 @@ func (instance *Instance) Latest() error {
 		if migration.Version > latestVersion {
 			latestVersion = migration.Version
 		}
-	}
-
-	if latestVersion <= currentVersion {
-		return &ErrNoMigrations{fmt.Sprintf("Instance.Latest: no migrations to apply, database version %d is the latest",
-			currentVersion)}
 	}
 
 	return instance.Goto(latestVersion)

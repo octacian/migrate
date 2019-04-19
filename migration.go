@@ -1,7 +1,6 @@
 package migrate
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path"
 	"path/filepath"
@@ -25,7 +24,7 @@ type Migration struct {
 func NewMigration(root string) (*Migration, error) {
 	_, name := filepath.Split(root)
 	if len(name) < 9 || name[:8] != "version_" {
-		return nil, fmt.Errorf("NewMigration: expected migration directory name to be formatted as "+
+		return nil, NewFatalf("NewMigration: expected migration directory name to be formatted as "+
 			"'version_<number>', got '%s'", name)
 	}
 
@@ -37,7 +36,7 @@ func NewMigration(root string) (*Migration, error) {
 	}
 
 	if version == 0 {
-		return nil, fmt.Errorf("NewMigration: got disallowed migration version '0', reserved to represent " +
+		return nil, NewFatalf("NewMigration: got disallowed migration version '0', reserved to represent " +
 			"the initial state of the database")
 	}
 
@@ -65,7 +64,7 @@ func NewMigration(root string) (*Migration, error) {
 
 	// if no parts were added, return an error
 	if len(migration.Parts) == 0 {
-		return nil, fmt.Errorf("NewMigration: no migration parts found in '%s'", root)
+		return nil, NewFatalf("NewMigration: no migration parts found in '%s'", root)
 	}
 
 	return migration, nil

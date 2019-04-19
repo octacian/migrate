@@ -87,3 +87,22 @@ With an instance created, migrate can now manage the database schema:
 regardless of whether up or down relative to the current.
 */
 package migrate
+
+import "fmt"
+
+// ErrFatal is used throughout the package to indicate when an error occurs
+// from which the current operation cannot recover.
+type ErrFatal struct {
+	Message string
+}
+
+// Error implements the error interface for ErrFatal.
+func (err *ErrFatal) Error() string {
+	return err.Message
+}
+
+// NewFatalf returns a new ErrFatal with a formatted message. Arguments are
+// handled in the manner of fmt.Printf.
+func NewFatalf(format string, a ...interface{}) *ErrFatal {
+	return &ErrFatal{fmt.Sprintf(format, a...)}
+}

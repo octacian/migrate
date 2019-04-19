@@ -34,7 +34,7 @@ func NewPart(path string) (*Part, error) {
 		}
 	}()
 
-	errNoMarker := fmt.Errorf("Migration.AddFile: expected part file '%s' to begin with a comment "+
+	errNoMarker := NewFatalf("Migration.AddFile: expected part file '%s' to begin with a comment "+
 		"denoting whether the following SQL represents an upward or downward migration "+
 		"(for example: '-- @migrate/up' or '@migrate/down')", path)
 
@@ -80,11 +80,11 @@ func NewPart(path string) (*Part, error) {
 	}
 
 	if upSQL == "" {
-		return nil, fmt.Errorf("Migration.AddFile: file '%s' contains no upward migration data", path)
+		return nil, NewFatalf("Migration.AddFile: file '%s' contains no upward migration data", path)
 	}
 
 	if downSQL == "" {
-		return nil, fmt.Errorf("Migration.AddFile: file '%s' contains no downward migration data", path)
+		return nil, NewFatalf("Migration.AddFile: file '%s' contains no downward migration data", path)
 	}
 
 	_, filename := filepath.Split(path)
