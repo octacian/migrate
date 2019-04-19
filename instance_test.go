@@ -118,6 +118,17 @@ func TestWorkingInstance(t *testing.T) {
 			if err := instance.Goto(0); err != nil {
 				t.Error("Instance.Goto: got error:\n", err)
 			}
+
+			if list := instance.List(); len(list) != 3 {
+				t.Errorf("Instance.List: got length of %d expected 3", len(list))
+			} else {
+				for key, value := range []int{1, 2, 3} {
+					if list[key] != value {
+						t.Errorf("Instance.List: got '%#v' expected '[]int{1, 2, 3}'", list)
+						break
+					}
+				}
+			}
 		}
 	})
 }

@@ -125,6 +125,16 @@ func (instance *Instance) Version() int {
 	return res.(int)
 }
 
+// List returns a slice of integers holding the version numbers of all
+// available Migrations.
+func (instance *Instance) List() []int {
+	versions := make([]int, 0)
+	for _, migration := range instance.migrations {
+		versions = append(versions, migration.Version)
+	}
+	return versions
+}
+
 // Goto applies any migrations necessary to bring the database schema to the
 // state defined by the migration version specified. Goto employs transactions,
 // ensuring that if anything fails, the database is automatically reverted to
