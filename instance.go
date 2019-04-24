@@ -165,7 +165,7 @@ func (instance *Instance) Goto(target int) error {
 
 		jump = target - currentVersion
 	} else if target < currentVersion { // else if requested version is less than the current version, migrate down
-		for i := currentVersion - 1; i > target; i-- {
+		for i := currentVersion; i > target; i-- {
 			if err := addToTodo(i); err != nil {
 				return err
 			}
@@ -188,8 +188,15 @@ func (instance *Instance) Goto(target int) error {
 
 	// Loop through and apply migrations
 	for key, migration := range todo {
+		fromVersion := currentVersion + key
+		toVersion := migration.Version
+		if direction == "down" {
+			fromVersion = currentVersion - key
+			toVersion--
+		}
+
 		fmt.Fprintf(instance.Output, "\033[1mmigrate: Beginning migration %s from version %d to %d...\033[0m\n",
-			direction, currentVersion+key, migration.Version)
+			direction, fromVersion, toVersion)
 
 		applied := make([]int, 0)
 		failed := make([]int, 0)
