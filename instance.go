@@ -129,8 +129,8 @@ func (instance *Instance) Version() int {
 // available Migrations.
 func (instance *Instance) List() []int {
 	versions := make([]int, 0)
-	for _, migration := range instance.migrations {
-		versions = append(versions, migration.Version)
+	for i := 1; i <= len(instance.migrations); i++ {
+		versions = append(versions, i)
 	}
 	return versions
 }
